@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f6feb">
+<title>在庫報告</title>
+<style>
+  :root {
+    --bg: #f4f6f9; --card: #ffffff; --text: #1f2933; --muted: #66727f; --line: #e1e5ea;
+    --primary: #1f6feb; --primary-2: #1559c4; --ok: #1a7f37; --warn: #b35900; --danger: #c62828;
+    --ok-bg: #e6f4ea; --warn-bg: #fff4e5; --danger-bg: #fdecea; --info-bg: #e8f0fe; --gray-bg: #eef1f4;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; font-size: 15px; line-height: 1.5; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--primary); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 8px; }
+  header h1 { font-size: 17px; margin: 0; flex: 1; }
+  header .now { font-size: 12px; opacity: .9; }
+  header button { background: rgba(255,255,255,.18); color: #fff; border: 0; border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  main { max-width: 640px; margin: 0 auto; padding: 12px 16px 40px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+  .card h2 .sub { font-size: 12px; color: var(--muted); font-weight: normal; margin-left: auto; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=date], input[type=text], input[type=number], input[type=tel] {
+    width: 100%; font-size: 16px; padding: 10px 12px; border: 1px solid #c9d1da; border-radius: 10px; background: #fff; color: var(--text);
+  }
+  .stock-row { display: flex; align-items: center; gap: 8px; }
+  .stock-row input { font-size: 26px; font-weight: 700; text-align: right; letter-spacing: .5px; }
+  .stock-row .unit { font-size: 18px; font-weight: 700; }
+  .pred { font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 20px; }
+  .pred b { color: var(--text); }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 15px; color: var(--text); }
+  .check input { width: 22px; height: 22px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn { display: block; width: 100%; margin-top: 14px; padding: 14px; font-size: 17px; font-weight: 700; border: 0; border-radius: 12px; background: var(--primary); color: #fff; }
+  .btn:disabled { opacity: .55; }
+  .btn-sm { border: 1px solid var(--line); background: #fff; color: var(--text); border-radius: 8px; padding: 4px 10px; font-size: 12px; }
+  .msg { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; display: none; }
+  .msg.ok { display: block; background: var(--ok-bg); color: var(--ok); }
+  .msg.err { display: block; background: var(--danger-bg); color: var(--danger); }
+  .msg.warn { display: block; background: var(--warn-bg); color: var(--warn); }
+  .warns div { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-bottom: 8px; }
+  .next-big { font-size: 22px; font-weight: 800; margin: 2px 0; }
+  .next-s { font-size: 13px; color: var(--muted); }
+  .next-s.alert { color: var(--danger); font-weight: 700; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .st-delivered { background: var(--gray-bg); color: var(--muted); }
+  .st-ordered { background: var(--ok-bg); color: var(--ok); }
+  .st-sent { background: var(--warn-bg); color: var(--warn); }
+  .st-planned { background: var(--info-bg); color: var(--primary-2); }
+  .st-recommended { background: var(--danger-bg); color: var(--danger); }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { padding: 9px 0; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .list li:first-child { border-top: 0; }
+  .list .d { font-weight: 700; min-width: 92px; }
+  .list .q { color: var(--muted); font-size: 13px; }
+  .list .r { margin-left: auto; }
+  .tbl-wrap { overflow-x: auto; margin: 0 -4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 4px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; border-top: 0; font-size: 12px; }
+  th:first-child, td:first-child { text-align: left; }
+  tr.today td { background: #fffbe6; font-weight: 700; }
+  tr.off td { color: var(--muted); }
+  td .by { display: block; font-size: 11px; color: var(--muted); font-weight: normal; }
+  td.act { font-weight: 700; }
+  .low { color: var(--danger); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .empty { color: var(--muted); font-size: 13px; }
+  details summary { cursor: pointer; color: var(--primary-2); font-size: 13px; }
+  .loading { text-align: center; color: var(--muted); padding: 20px 0; }
+  .del { color: var(--muted); text-decoration: line-through; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⛽ 在庫報告</h1>
+  <span class="now" id="nowLabel"></span>
+  <button type="button" onclick="loadStatus()">更新</button>
+</header>
+<main>
+  <section class="card">
+    <h2>17時の在庫を報告</h2>
+    <form id="reportForm" onsubmit="submitReport(event)">
+      <label for="fDate">日付</label>
+      <input type="date" id="fDate" required onchange="updatePred()">
+      <label for="fStock">在庫（17時の実測）</label>
+      <div class="stock-row">
+        <input type="tel" id="fStock" inputmode="numeric" pattern="[0-9,]*" placeholder="例: 15200" autocomplete="off" required oninput="updatePred()">
+        <span class="unit">L</span>
+      </div>
+      <div class="pred" id="predLine"></div>
+      <label class="check"><input type="checkbox" id="fDelivered" onchange="updatePred()"> この日に納品がありました（<span id="qtyLabel">18,000</span>L）</label>
+      <div class="row2">
+        <div>
+          <label for="fBy">報告者</label>
+          <input type="text" id="fBy" maxlength="20" placeholder="名前" required autocomplete="name">
+        </div>
+        <div>
+          <label for="fNote">メモ（任意）</label>
+          <input type="text" id="fNote" maxlength="100" placeholder="例: 午後納品">
+        </div>
+      </div>
+      <button class="btn" id="sendBtn" type="submit">報告する</button>
+      <div class="msg" id="formMsg"></div>
+    </form>
+  </section>
+
+  <div class="warns" id="warns"></div>
+
+  <section class="card">
+    <h2>次の発注 <span class="sub" id="basisLabel"></span></h2>
+    <div id="nextBox"><div class="loading">読み込み中…</div></div>
+  </section>
+
+  <section class="card">
+    <h2>納品の予定と発注状況</h2>
+    <ul class="list" id="upcomingList"><li class="empty">読み込み中…</li></ul>
+    <div class="hint">推奨＝まだ発注していない、予測からの提案です。送信済＝申請メールを送り、担当者への転送を待っています。発注済＝転送を確認しました。</div>
+  </section>
+
+  <section class="card">
+    <h2>在庫の一覧 <span class="sub">17時の在庫</span></h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>日付</th><th>在庫（実測・予測）</th><th>納品</th></tr></thead>
+        <tbody id="daysBody"><tr><td colspan="3" class="empty">読み込み中…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="hint">太字が実測（報告者）、「予測」はアプリの見込みと最小〜最大の幅です。日曜・祝日は締めがないため、使用量は翌営業日に合算されます。</div>
+  </section>
+
+  <section class="card">
+    <h2>発注メールの記録</h2>
+    <ul class="list" id="ordersList"><li class="empty">読み込み中…</li></ul>
+  </section>
+
+  <section class="card">
+    <h2>最近の報告</h2>
+    <ul class="list" id="reportsList"><li class="empty">読み込み中…</li></ul>
+    <div class="hint">間違えた報告は「取消」を押してから、正しい値で報告し直してください。同じ日に複数の報告がある場合は、最後の報告を使います。</div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>ホーム画面に追加する方法</summary>
+      <div class="hint" style="font-size:13px;line-height:1.8">
+        Android（Chrome）: 右上の「︙」→「ホーム画面に追加」→「追加」。<br>
+        iPhone（Safari）: 下の共有ボタン →「ホーム画面に追加」。<br>
+        このページのリンクには鍵が含まれています。報告する人以外には教えないでください。
+      </div>
+    </details>
+  </section>
+</main>
+<script>
+  // 鍵はアドレスの #k=… から読む（ホーム画面のアイコンから開いたときのために、この端末にも覚えておく）
+  const API_URL = 'https://script.google.com/macros/s/AKfycbzuvNZlNbZKCqZgdjMzq7zRnsnwGacWBBbKbRf7tnzSaG3vV6s74OaNsp5NtsRIIbUtoQ/exec';
+  const HASH = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const KEY = (function() {
+    const k = HASH.get('k') || new URLSearchParams(location.search).get('k') || '';
+    if (/^[0-9a-f]{20,64}$/.test(k)) { try { localStorage.setItem('fuelReportKey', k); } catch (e) {} return k; }
+    try { return localStorage.getItem('fuelReportKey') || ''; } catch (e) { return ''; }
+  })();
+  // 確認用に別のデプロイを使うとき: #k=…&api=https://script.google.com/macros/s/…/exec
+  const API = (function() {
+    const a = HASH.get('api') || '';
+    return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(a) ? a : API_URL;
+  })();
+  const DOW = ['日', '月', '火', '水', '木', '金', '土'];
+  let status = null;
+
+  function pad(n) { return ('0' + n).slice(-2); }
+  function keyOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function dateOf(k) { const a = k.split('-').map(Number); return new Date(a[0], a[1] - 1, a[2]); }
+  function md(k) { const d = dateOf(k); return (d.getMonth() + 1) + '/' + d.getDate() + '(' + DOW[d.getDay()] + ')'; }
+  function fmtL(v) { return v == null || !isFinite(v) ? '-' : Math.round(v).toLocaleString('ja-JP') + 'L'; }
+  function slotLabel(s) { return s === 'pm' ? '午後' : '午前'; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+  function timeOf(iso) { if (!iso) return ''; const d = new Date(iso); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+  function recall(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+  const STATUS = {
+    delivered: ['納品済', 'st-delivered'],
+    ordered: ['発注済', 'st-ordered'],
+    sent: ['送信済・転送待ち', 'st-sent'],
+    planned: ['予定・未発注', 'st-planned'],
+    recommended: ['推奨・未発注', 'st-recommended']
+  };
+  function chip(st, short) { const s = STATUS[st]; return s ? `<span class="chip ${s[1]}">${short ? s[0].split('・')[0] : s[0]}</span>` : ''; }
+
+  // ---- サーバー呼び出し（ローカルの確認用にモックへ切り替え）----
+  function call(fn, ...args) {
+    return new Promise((resolve, reject) => {
+      if (!window.MockServer) {
+        if (!KEY) { reject(new Error('このリンクは使えません。管理者に新しいリンクを確認してください。')); return; }
+        // Google のログイン情報（Cookie）は送らない。本文は text/plain で送り、事前確認の通信を起こさない
+        fetch(API, { method: 'POST', credentials: 'omit', redirect: 'follow', body: JSON.stringify({ fn, k: KEY, args }) })
+          .then(r => { if (!r.ok) throw new Error('サーバーに接続できません（' + r.status + '）'); return r.json(); })
+          .then(j => { if (j && j.ok) resolve(j.result); else reject(new Error((j && j.error) || 'サーバーのエラーです')); })
+          .catch(e => reject(e instanceof TypeError ? new Error('サーバーに接続できません。電波を確認して「更新」を押してください') : e));
+      } else if (window.MockServer) {
+        window.MockServer[fn](...args).then(resolve, reject);
+      } else reject(new Error('サーバーに接続できません'));
+    });
+  }
+
+  // 17時の在庫。昼より前に開いたときは、前の営業日（休日を飛ばす）の在庫を報告する想定
+  function defaultDate() {
+    const now = new Date();
+    const d = new Date(now);
+    if (now.getHours() >= 12) return keyOf(d);
+    for (let g = 0; g < 7; g++) {
+      d.setDate(d.getDate() - 1);
+      const day = dayOf(keyOf(d));
+      if (!(day ? day.nb : d.getDay() === 0)) break;
+    }
+    return keyOf(d);
+  }
+
+  function dayOf(k) { return status && (status.days || []).find(d => d.key === k); }
+
+  function updatePred() {
+    const k = document.getElementById('fDate').value;
+    const el = document.getElementById('predLine');
+    const day = k ? dayOf(k) : null;
+    const v = Number(String(document.getElementById('fStock').value || '').replace(/[,，\s]/g, ''));
+    const cap = status ? status.inputs.capacity : 30000;
+    const parts = [];
+    if (day && day.exp != null) {
+      parts.push(`この日の予測 <b>${fmtL(day.exp)}</b>（${fmtL(day.low)}〜${fmtL(day.high)}）`);
+    }
+    if (day && day.actual != null) {
+      const by = day.source && day.source.by ? `（${esc(day.source.by)}）` : '';
+      parts.push(`登録済み ${fmtL(day.actual)}${by}`);
+    }
+    let warn = '';
+    if (document.getElementById('fStock').value !== '' && isFinite(v)) {
+      if (v > cap) warn = `容量 ${fmtL(cap)} を超えています。値を確認してください`;
+      else if (day && day.low != null && day.exp != null && (v < day.low - 2000 || v > day.high + 2000)) warn = '予測と大きく違います。値と日付を確認してください（納品の有無も）';
+    }
+    const now = new Date();
+    if (k === keyOf(now) && now.getHours() < 16) warn = (warn ? warn + '。' : '') + '今日の在庫は17時ごろの値を報告してください';
+    el.innerHTML = parts.join(' ・ ') + (warn ? `<div style="color:var(--warn);font-weight:700">${esc(warn)}</div>` : '');
+  }
+
+  function render() {
+    const s = status;
+    if (!s) return;
+    document.getElementById('nowLabel').textContent = md(s.today) + ' ' + new Date(s.now).toTimeString().slice(0, 5) + ' 時点';
+    document.getElementById('qtyLabel').textContent = (s.inputs.orderQty || 18000).toLocaleString('ja-JP');
+    document.getElementById('warns').innerHTML = (s.warnings || []).map(w => `<div>${esc(w)}</div>`).join('');
+    const b = s.basis;
+    document.getElementById('basisLabel').textContent = b ? (b.latestSnap ? `基準: ${md(b.latestSnap)} の在庫 ${fmtL(b.stock)}` : '在庫の実測なし') : '';
+
+    // 次の発注
+    const n = s.next;
+    const nb = document.getElementById('nextBox');
+    if (!s.hasPlan) nb.innerHTML = '<div class="empty">発注予測は、ダッシュボードを開くと表示されます。</div>';
+    else if (!n) nb.innerHTML = '<div class="empty">予測期間（約1か月）には、納品の必要はありません。</div>';
+    else {
+      const dl = n.deadline;
+      const alert = n.deadlinePassed || (dl && dl.day === s.today);
+      nb.innerHTML = `
+        <div>${chip(n.status)}</div>
+        <div class="next-big">${md(n.key)} ${slotLabel(n.slot)} ${fmtL(n.qty)}</div>
+        ${dl && (n.status === 'recommended' || n.status === 'planned') ? `<div class="next-s ${alert ? 'alert' : ''}">発注締切 ${md(dl.day)} 9:00${dl.early ? '（大型連休前のため早め）' : ''}${n.deadlinePassed ? ' ・ 締切を過ぎています' : ''}</div>` : ''}
+        ${n.arrival ? `<div class="next-s">到着時の在庫見込み ${fmtL(n.arrival.low)}〜${fmtL(n.arrival.high)} ・ 納品後 約${fmtL(n.after)}</div>` : ''}
+        ${n.stockoutRisk ? '<div class="next-s alert">安全在庫を割る恐れがあります</div>' : ''}
+        ${n.overflowRisk ? (n.conflict ? '<div class="next-s alert">在庫切れを避けるための最後の枠です。在庫が多めだと容量を超える恐れがあるため、前日17時の在庫を報告してください</div>' : '<div class="next-s alert">容量を超える恐れがあります</div>') : ''}`;
+    }
+
+    // 納品予定
+    const up = s.upcoming || [];
+    document.getElementById('upcomingList').innerHTML = up.length ? up.map(u => `
+      <li><span class="d">${md(u.key)} ${slotLabel(u.slot)}</span><span class="q">${fmtL(u.qty)}${u.deadline && (u.status === 'recommended' || u.status === 'planned') ? ` ・ 締切 ${md(u.deadline.day)} 9:00` : ''}</span><span class="r">${chip(u.status)}</span></li>`).join('')
+      : `<li class="empty">${s.hasPlan ? '予定はありません' : '発注予測はまだありません'}</li>`;
+
+    // 在庫の一覧
+    const floor = s.inputs.floor || 1000;
+    const rows = (s.days || []).map(d => {
+      const isToday = d.key === s.today;
+      const src = d.source;
+      const by = src ? (src.src === 'report' ? esc(src.by || '報告') : src.src === 'mail' ? 'メール' : 'ダッシュボード') : '';
+      const stockCell = d.actual != null
+        ? `<b>${fmtL(d.actual)}</b><span class="by">実測・${by}</span>`
+        : d.exp != null ? `<span class="${d.low != null && d.low < floor ? 'low' : ''}">予測 ${fmtL(d.exp)}</span><span class="by">${fmtL(d.low)}〜${fmtL(d.high)}</span>` : '';
+      const dlv = d.order > 0 ? `${slotLabel(d.slot)} ${Math.round(d.order / 1000)}KL<br>${chip(d.status, true)}` : '';
+      return `<tr class="${isToday ? 'today' : ''} ${d.nb ? 'off' : ''}"><td>${md(d.key)}${d.nb ? '<span class="by">休み</span>' : ''}</td><td>${stockCell}</td><td>${dlv}</td></tr>`;
+    });
+    document.getElementById('daysBody').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="3" class="empty">まだ在庫の記録がありません</td></tr>';
+
+    // 発注メール
+    const os = s.orders || [];
+    document.getElementById('ordersList').innerHTML = os.length ? os.map(o => `
+      <li><span class="d">${(o.items || []).map(it => md(it.date) + slotLabel(it.slot)).join('・') || '-'}</span><span class="q">送信 ${timeOf(o.at)}${o.via === 'auto' ? '（自動）' : ''}</span><span class="r">${o.status === 'confirmed' ? chip('ordered') : chip('sent')}</span></li>`).join('')
+      : '<li class="empty">まだ記録がありません</li>';
+
+    // 最近の報告
+    const rs = s.reports || [];
+    document.getElementById('reportsList').innerHTML = rs.length ? rs.slice(0, 15).map(r => `
+      <li class="${r.deleted ? 'del' : ''}"><span class="d">${md(r.date)} ${fmtL(r.stock)}</span><span class="q">${esc(r.by)} ・ ${timeOf(r.at)}${r.delivered ? ' ・ 納品あり' : ''}${r.note ? ' ・ ' + esc(r.note) : ''}${r.deleted ? ' ・ 取消済' : ''}</span>
+      ${r.deleted ? '' : `<span class="r"><button class="btn-sm" type="button" onclick="cancelReport('${esc(r.id)}')">取消</button></span>`}</li>`).join('')
+      : '<li class="empty">まだ報告がありません</li>';
+
+    // 納品日なら「納品あり」を初期値に
+    const k = document.getElementById('fDate').value;
+    const day = dayOf(k);
+    const chk = document.getElementById('fDelivered');
+    if (!chk.dataset.touched) chk.checked = Boolean(day && day.order > 0 && (day.status === 'ordered' || day.status === 'delivered' || day.status === 'sent'));
+    updatePred();
+  }
+
+  function showMsg(text, cls) {
+    const el = document.getElementById('formMsg');
+    el.className = 'msg ' + (cls || 'ok');
+    el.textContent = text;
+  }
+
+  async function loadStatus() {
+    try {
+      const first = !status;
+      status = await call('getReportStatus');
+      if (first && !document.getElementById('fDate').dataset.touched) document.getElementById('fDate').value = defaultDate();
+      render();
+    } catch (e) {
+      showMsg('読み込めませんでした: ' + ((e && e.message) || e), 'err');
+    }
+  }
+
+  async function submitReport(ev) {
+    ev.preventDefault();
+    const date = document.getElementById('fDate').value;
+    const raw = String(document.getElementById('fStock').value || '').replace(/[,，\s]/g, '');
+    const by = document.getElementById('fBy').value.trim();
+    if (!date || raw === '' || !/^\d+$/.test(raw)) { showMsg('日付と在庫（数字）を入力してください', 'err'); return; }
+    if (!by) { showMsg('報告者の名前を入力してください', 'err'); return; }
+    const stock = Number(raw);
+    const cap = status ? status.inputs.capacity : 30000;
+    if (stock > cap && !confirm(`${fmtL(stock)} は容量 ${fmtL(cap)} を超えています。このまま報告しますか？`)) return;
+    store('fuelReportBy', by);
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true; btn.textContent = '送信中…';
+    try {
+      const delivered = document.getElementById('fDelivered').checked;
+      status = await call('submitStockReport', {
+        date, stock, by, note: document.getElementById('fNote').value.trim(),
+        delivered, deliveredQty: delivered ? (status ? status.inputs.orderQty : 18000) : 0
+      });
+      showMsg(`${md(date)} の在庫 ${fmtL(stock)} を報告しました${delivered ? '（納品あり）' : ''}。ありがとうございました。`, 'ok');
+      document.getElementById('fStock').value = '';
+      document.getElementById('fNote').value = '';
+      render();
+    } catch (e) {
+      showMsg('報告できませんでした: ' + ((e && e.message) || e), 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = '報告する';
+    }
+  }
+
+  async function cancelReport(id) {
+    const r = (status && status.reports || []).find(x => x.id === id);
+    if (!r || !confirm(`${md(r.date)} ${fmtL(r.stock)}（${r.by}）の報告を取り消しますか？`)) return;
+    try {
+      status = await call('deleteStockReport', id, document.getElementById('fBy').value.trim());
+      showMsg(`${md(r.date)} ${fmtL(r.stock)} の報告を取り消しました`, 'warn');
+      render();
+    } catch (e) {
+      showMsg('取り消せませんでした: ' + ((e && e.message) || e), 'err');
+    }
+  }
+
+  document.getElementById('fDate').value = defaultDate();
+  document.getElementById('fDate').max = keyOf(new Date());
+  document.getElementById('fBy').value = recall('fuelReportBy') || '';
+  document.getElementById('fDelivered').addEventListener('change', e => { e.target.dataset.touched = '1'; });
+  document.getElementById('fDate').addEventListener('change', e => { e.target.dataset.touched = '1'; delete document.getElementById('fDelivered').dataset.touched; render(); });
+  loadStatus();
+</script>
+</body>
+</html>
