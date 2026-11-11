@@ -190,7 +190,7 @@
   function dateOf(k) { const a = k.split('-').map(Number); return new Date(a[0], a[1] - 1, a[2]); }
   function md(k) { const d = dateOf(k); return (d.getMonth() + 1) + '/' + d.getDate() + '(' + DOW[d.getDay()] + ')'; }
   function fmtL(v) { return v == null || !isFinite(v) ? '-' : Math.round(v).toLocaleString('ja-JP') + 'L'; }
-  function slotLabel(s) { return s === 'pm' ? '午後' : '午前'; }
+  function slotLabel(s) { return s === 'am' ? '午前' : s === 'pm' ? '午後' : 'フリー'; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
   function timeOf(iso) { if (!iso) return ''; const d = new Date(iso); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
