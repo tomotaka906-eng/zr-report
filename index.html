@@ -3,6 +3,12 @@
 <head>
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="referrer" content="no-referrer">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/report-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/report-192.png">
+<link rel="apple-touch-icon" href="icons/report-apple-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="在庫報告">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#1f6feb">
@@ -24,7 +30,10 @@
   .card h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
   .card h2 .sub { font-size: 12px; color: var(--muted); font-weight: normal; margin-left: auto; }
   label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
-  input[type=date], input[type=text], input[type=number], input[type=tel] {
+  .by-row { display: flex; gap: 6px; align-items: center; }
+  .by-row select { flex: 1; min-width: 0; }
+  .by-row .btn-sm { padding: 8px 10px; font-size: 14px; }
+  select, input[type=date], input[type=text], input[type=number], input[type=tel] {
     width: 100%; font-size: 16px; padding: 10px 12px; border: 1px solid #c9d1da; border-radius: 10px; background: #fff; color: var(--text);
   }
   .stock-row { display: flex; align-items: center; gap: 8px; }
@@ -96,8 +105,12 @@
       <label class="check"><input type="checkbox" id="fDelivered" onchange="updatePred()"> この日に納品がありました（<span id="qtyLabel">18,000</span>L）</label>
       <div class="row2">
         <div>
-          <label for="fBy">報告者</label>
-          <input type="text" id="fBy" maxlength="20" placeholder="名前" required autocomplete="name">
+          <label for="fBySel">報告者</label>
+          <div class="by-row">
+            <select id="fBySel" onchange="onBySel()"></select>
+            <button type="button" class="btn-sm" id="fByDel" onclick="removeName()" title="この端末の一覧から消す">×</button>
+          </div>
+          <input type="text" id="fBy" maxlength="20" placeholder="名前を入力" autocomplete="name" style="display:none;margin-top:6px">
         </div>
         <div>
           <label for="fNote">メモ（任意）</label>
@@ -208,17 +221,57 @@
     });
   }
 
-  // 17時の在庫。昼より前に開いたときは、前の営業日（休日を飛ばす）の在庫を報告する想定
-  function defaultDate() {
-    const now = new Date();
-    const d = new Date(now);
-    if (now.getHours() >= 12) return keyOf(d);
-    for (let g = 0; g < 7; g++) {
-      d.setDate(d.getDate() - 1);
-      const day = dayOf(keyOf(d));
-      if (!(day ? day.nb : d.getDay() === 0)) break;
-    }
-    return keyOf(d);
+  // 日付は、ページを開いた日（今日）にする
+  function defaultDate() { return keyOf(new Date()); }
+
+  // 開いたままの画面を次の日に開き直したときも、手で変えていなければ今日にそろえる
+  function refreshDate() {
+    const el = document.getElementById('fDate');
+    const today = keyOf(new Date());
+    el.max = today;
+    if (!el.dataset.touched && el.value !== today) { el.value = today; updatePred(); }
+  }
+
+  // ---- 報告者（この端末に覚えて、次からは選ぶだけ）----
+  const NEW_NAME = '__new';
+  function savedNames() {
+    try { const a = JSON.parse(recall('fuelReportNames') || '[]'); if (Array.isArray(a)) return a.filter(x => typeof x === 'string' && x); } catch (e) {}
+    const old = recall('fuelReportBy');
+    return old ? [old] : [];
+  }
+  function renderNames(selected) {
+    const names = savedNames();
+    const sel = document.getElementById('fBySel');
+    const pick = selected != null ? selected : (recall('fuelReportBy') || names[0] || '');
+    sel.innerHTML = names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('') + `<option value="${NEW_NAME}">＋ 新しい名前を入力</option>`;
+    sel.value = names.includes(pick) ? pick : NEW_NAME;
+    onBySel();
+  }
+  function onBySel() {
+    const isNew = document.getElementById('fBySel').value === NEW_NAME;
+    const input = document.getElementById('fBy');
+    input.style.display = isNew ? '' : 'none';
+    document.getElementById('fByDel').style.display = isNew ? 'none' : '';
+    if (isNew && document.activeElement === document.getElementById('fBySel') && savedNames().length) input.focus();
+  }
+  function currentBy() {
+    const sel = document.getElementById('fBySel');
+    return (sel.value === NEW_NAME ? document.getElementById('fBy').value : sel.value).trim();
+  }
+  function rememberName(by) {
+    const names = [by].concat(savedNames().filter(n => n !== by)).slice(0, 20);
+    store('fuelReportNames', JSON.stringify(names));
+    store('fuelReportBy', by);
+    document.getElementById('fBy').value = '';
+    renderNames(by);
+  }
+  function removeName() {
+    const by = document.getElementById('fBySel').value;
+    if (!by || by === NEW_NAME || !confirm(`「${by}」をこの端末の一覧から消しますか？（報告の記録は消えません）`)) return;
+    const names = savedNames().filter(n => n !== by);
+    store('fuelReportNames', JSON.stringify(names));
+    if (recall('fuelReportBy') === by) store('fuelReportBy', names[0] || null);
+    renderNames();
   }
 
   function dayOf(k) { return status && (status.days || []).find(d => d.key === k); }
@@ -324,7 +377,7 @@
     try {
       const first = !status;
       status = await call('getReportStatus');
-      if (first && !document.getElementById('fDate').dataset.touched) document.getElementById('fDate').value = defaultDate();
+      if (first) refreshDate();
       render();
     } catch (e) {
       showMsg('読み込めませんでした: ' + ((e && e.message) || e), 'err');
@@ -335,13 +388,12 @@
     ev.preventDefault();
     const date = document.getElementById('fDate').value;
     const raw = String(document.getElementById('fStock').value || '').replace(/[,，\s]/g, '');
-    const by = document.getElementById('fBy').value.trim();
+    const by = currentBy();
     if (!date || raw === '' || !/^\d+$/.test(raw)) { showMsg('日付と在庫（数字）を入力してください', 'err'); return; }
     if (!by) { showMsg('報告者の名前を入力してください', 'err'); return; }
     const stock = Number(raw);
     const cap = status ? status.inputs.capacity : 30000;
     if (stock > cap && !confirm(`${fmtL(stock)} は容量 ${fmtL(cap)} を超えています。このまま報告しますか？`)) return;
-    store('fuelReportBy', by);
     const btn = document.getElementById('sendBtn');
     btn.disabled = true; btn.textContent = '送信中…';
     try {
@@ -350,6 +402,7 @@
         date, stock, by, note: document.getElementById('fNote').value.trim(),
         delivered, deliveredQty: delivered ? (status ? status.inputs.orderQty : 18000) : 0
       });
+      rememberName(by);
       showMsg(`${md(date)} の在庫 ${fmtL(stock)} を報告しました${delivered ? '（納品あり）' : ''}。ありがとうございました。`, 'ok');
       document.getElementById('fStock').value = '';
       document.getElementById('fNote').value = '';
@@ -365,7 +418,7 @@
     const r = (status && status.reports || []).find(x => x.id === id);
     if (!r || !confirm(`${md(r.date)} ${fmtL(r.stock)}（${r.by}）の報告を取り消しますか？`)) return;
     try {
-      status = await call('deleteStockReport', id, document.getElementById('fBy').value.trim());
+      status = await call('deleteStockReport', id, currentBy());
       showMsg(`${md(r.date)} ${fmtL(r.stock)} の報告を取り消しました`, 'warn');
       render();
     } catch (e) {
@@ -375,7 +428,8 @@
 
   document.getElementById('fDate').value = defaultDate();
   document.getElementById('fDate').max = keyOf(new Date());
-  document.getElementById('fBy').value = recall('fuelReportBy') || '';
+  renderNames();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshDate(); });
   document.getElementById('fDelivered').addEventListener('change', e => { e.target.dataset.touched = '1'; });
   document.getElementById('fDate').addEventListener('change', e => { e.target.dataset.touched = '1'; delete document.getElementById('fDelivered').dataset.touched; render(); });
   loadStatus();
